@@ -11,6 +11,8 @@ if (!requireNamespace("future", quietly = TRUE)) {
 }
 library(future)
 
+install.packages("remotes")
+library(remotes)
 remotes::install_github("moodymudskipper/midi")
 library(midi)
 
