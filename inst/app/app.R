@@ -11,7 +11,7 @@ if (!requireNamespace("future", quietly = TRUE)) {
 }
 library(future)
 
-#remotes::install_github("moodymudskipper/midi")
+remotes::install_github("moodymudskipper/midi")
 library(midi)
 
 plan(multisession)
