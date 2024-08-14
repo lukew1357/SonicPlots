@@ -1,21 +1,23 @@
 options(repos = c(CRAN = "https://cloud.r-project.org"))
 library(shiny)
+library(shinyjs)
 library(lubridate)
 library(ggplot2)
 library(dplyr)
 library(tuneR)
 library(forecast)
 library(fluidsynth)
-if (!requireNamespace("future", quietly = TRUE)) {
-  install.packages("future")
-}
-library(future)
+library(av)
+library(audio)
+library(misty)
 
-library(remotes)
-remotes::install_github("moodymudskipper/midi")
+if (!requireNamespace("midi", quietly = TRUE)) {
+  remotes::install_github("moodymudskipper/midi")
+}
 library(midi)
 
-plan(multisession)
+wd <- system.file("app", package = "SonicPlots")
+setwd(wd)
 
 # Function to remove initial note events from the second track
 remove_initial_events <- function(mid) {
@@ -42,8 +44,8 @@ sonify_data <- function(csv_file, template_midi_file, output_midi_file, key_scal
   }
 
   #data <- data %>%
-   # mutate(date = mdy(date)) %>%
-    #arrange(date)
+  # mutate(date = mdy(date)) %>%
+  #arrange(date)
 
   # Set a constant time interval between notes using input tempo
   constant_ticks <- 57600/tempo
@@ -119,9 +121,39 @@ sonify_data <- function(csv_file, template_midi_file, output_midi_file, key_scal
 
   mid$encode(output_midi_file)
   cat("New MIDI file saved at:", output_midi_file)
+
+  sf_path <- system.file("extdata/soundfont.sf2", package = "SonicPlots")
+
+  # Define the directory where the files should be saved
+  output_dir <<- system.file("extdata", package = "SonicPlots")
+
+  # Define the full paths for the output files
+  output_midi_path <<- file.path(output_dir, "output_midi.mid")
+
+  # Get the path to the www directory after the package is installed
+  www_path <<- system.file("www", package = "SonicPlots")
+  output_wav <<- file.path(www_path, "output.wav")
+
+  # Get the path to the fluidsynth object
+  fluidsynth_path <- system.file("extdata/fluidsynth/bin/fluidsynth.exe", package = "SonicPlots")
+
+  # Construct the FluidSynth command
+  # The '-ni' flag suppresses the interactive mode, and '-F' specifies the output file
+  command <- sprintf('"%s" -ni "%s" "%s" -F "%s"', fluidsynth_path, sf_path, output_midi_path, output_wav)
+
+  # Execute the command
+  system(command, wait = TRUE)
+
+  # Check if the WAV file was created
+  if (!file.exists(output_wav)) {
+    stop("Failed to create the WAV file using FluidSynth.")
+  }
+
+  cat("\nConversion complete.\nWAV file located at:", output_wav)
 }
 
 ui <- fluidPage(
+  useShinyjs(),  # Initialize shinyjs
   titlePanel("SonicPlots - A Data Sonification Tool By Luke Williams"),
   sidebarLayout(
     sidebarPanel(
@@ -163,9 +195,11 @@ ui <- fluidPage(
              tags$a(href = "https://en.wikipedia.org/wiki/General_MIDI#Parameter_interpretations", "General MIDI Standard"),
              "as reference for instruments"),
       fluidRow(
-        column(6, actionButton("sonify", "Sonify Data"), style = "color:green"),
-        column(6, actionButton("stop", "Stop Playback"))
-      )
+        column(6, actionButton("sonify", "Sonify Data")),
+        column(6, actionButton("stop", "Stop (Terminate R)"))
+      ),
+      verbatimTextOutput("sonificationOutput"),
+      uiOutput("audioPlayer")
     ),
     mainPanel(
       tabsetPanel(
@@ -204,8 +238,7 @@ ui <- fluidPage(
                    verbatimTextOutput("modelSummary")
                  )
         )
-      ),
-      verbatimTextOutput("sonificationOutput")
+      )
     )
   )
 )
@@ -287,76 +320,43 @@ server <- function(input, output, session) {
     summary(data())
   })
 
-  # Variable to store the future object for playing the MIDI
-  midi_future <- reactiveVal(NULL)
-
   observeEvent(input$sonify, {
     req(data())
-    # Save the reactive data to a temporary CSV file
-    temp_csv <- tempfile(fileext = ".csv")
-    write.csv(data(), temp_csv, row.names = FALSE)
-    # Define file paths for the template and output MIDI files
-    template_midi_path <- system.file("extdata/template.mid", package = "SonicPlots")
-    output_midi_path <- "output_midi.mid"
 
-    # Determine the key scale
-    key_scale <- paste0(input$keyNote, if (input$isMajor) "maj" else "min")
-
-    # Run the sonification function
-    sonify_data(temp_csv, template_midi_path, output_midi_path, key_scale, input$instrument, input$tempo)
-
-    # Stop any previous playback
-    if (!is.null(midi_future())) {
-      future::resolved(midi_future())
-      midi_future(NULL)
-    }
-
-    # Play the generated MIDI file using fluidsynth
-    new_future <- future({
-      if (!file.exists(output_midi_path)) {
-        stop("MIDI file does not exist: ", output_midi_path)
-      }
-
-      # Read the MIDI file
-      midi_df <- midi_read(output_midi_path)
-
-      # Download the SoundFont file
-      soundfont_download()
-
-      # Get the path to the downloaded SoundFont file
-      sf_path <- soundfont_path()
-
-      # Ensure the SoundFont file exists
-      if (!file.exists(sf_path)) {
-        stop("SoundFont file does not exist: ", sf_path)
-      }
-
-      # Play the MIDI file using the SoundFont
-      midi_play(
-        output_midi_path,
-        soundfont = sf_path,
-        verbose = TRUE
-      )
-
-      midi_df$encode(output_midi_path)
+    output$sonificationOutput <- renderText({
+      "Sonifying data..."
     })
 
-    # Store the future object
-    midi_future(new_future)
+    # Force shiny to refresh the UI
+    shinyjs::delay(10, {
+      # Save the reactive data to a temporary CSV file
+      temp_csv <- tempfile(fileext = ".csv")
+      write.csv(data(), temp_csv, row.names = FALSE)
 
-    # Provide feedback to the user
-    output$sonificationOutput <- renderText({
-      "Sonification complete. Playing the sound."
+      # Define file paths for the template and output files
+      template_midi_path <- system.file("extdata/template.mid", package = "SonicPlots")
+      output_dir <- system.file("extdata", package = "SonicPlots")
+      output_midi_path <- file.path(output_dir, "output_midi.mid")
+
+      # Determine the key scale
+      key_scale <- paste0(input$keyNote, if (input$isMajor) "maj" else "min")
+
+      # Run the sonification function
+      sonify_data(temp_csv, template_midi_path, output_midi_path, key_scale, input$instrument, input$tempo)
+
+      # Load the WAV file
+      wave_obj <<- load.wave(output_wav)
+      play(wave_obj)
+
+      # Provide feedback to the user
+      output$sonificationOutput <- renderText({
+        "Sonification complete. Playing audio."
+      })
     })
   })
 
   observeEvent(input$stop, {
-    # Stop the playback by resolving the future
-    if (!is.null(midi_future())) {
-      future::resolved(midi_future())
-      midi_future(NULL)
-    }
-    session$reload()
+    restart()
   })
 
   observe({
@@ -382,5 +382,4 @@ server <- function(input, output, session) {
 }
 
 #Run the application
-
 shinyApp(ui = ui, server = server)
