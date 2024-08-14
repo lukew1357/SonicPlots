@@ -6,7 +6,7 @@ library(dplyr)
 library(tuneR)
 library(fluidsynth)
 library(av)
-library(misty)
+#library(misty)
 
 if (!requireNamespace("midi", quietly = TRUE)) {
   remotes::install_github("moodymudskipper/midi")
