@@ -1,20 +1,22 @@
 options(repos = c(CRAN = "https://cloud.r-project.org"))
 library(shiny)
-library(shinyjs)
 library(lubridate)
 library(ggplot2)
 library(dplyr)
 library(tuneR)
-library(forecast)
 library(fluidsynth)
 library(av)
-library(audio)
 library(misty)
 
 if (!requireNamespace("midi", quietly = TRUE)) {
   remotes::install_github("moodymudskipper/midi")
 }
 library(midi)
+
+if (!requireNamespace("shinyjs", quietly = TRUE)) {
+  install.packages("shinyjs")
+}
+library(shinyjs)
 
 wd <- system.file("app", package = "SonicPlots")
 setwd(wd)
@@ -381,7 +383,5 @@ server <- function(input, output, session) {
   })
 }
 
-#Run the application
-shinyApp(ui = ui, server = server)
 #Run the application
 shinyApp(ui = ui, server = server)
