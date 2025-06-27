@@ -65,3 +65,7 @@ GitHub: [lukew1357](https://github.com/lukew1357)
 Email: williams.luke999@gmail.com
 
 ---
+
+> ⚠️ This project is protected by copyright. No use, distribution, or modification is permitted without the author's explicit permission.
+
+---
