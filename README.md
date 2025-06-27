@@ -4,6 +4,8 @@
 
 This project was developed for my MSc Applied Data Science & Statistics dissertation at the University of Exeter, completed in 2024.
 
+### ***Code can be found here:  inst / app / app.R***
+
 ## Project Overview
 
 The core of SonicPlots is a prototype web application built in **R** using the **Shiny** framework. It allows users to:
